@@ -15,6 +15,12 @@ class Program
             Required = false
         };
 
+        Option<string> artistOption = new("--artist")
+        {
+            Description = "The artist name.",
+            Required = false
+        };
+
         Option<string> genreOption = new("--genre")
         {
             Description = "The genre name.",
@@ -26,6 +32,12 @@ class Program
             Description = "Whether to remove all data before import.",
             Required = false,
             DefaultValueFactory = (argResult) => false
+        };
+
+        Option<DirectoryInfo> directoryOption = new("--directory")
+        {
+            Description = "The directory to use.",
+            Required = true
         };
 
         Command importCommand = new("import", "Import a music library.") { cleanOption };
@@ -42,14 +54,18 @@ class Program
             Console.WriteLine("Importing Library");
 
             var library = configService.GetMusicDirectory();
-            var files = Directory.GetFiles(library, "*.mp3", new EnumerationOptions() { RecurseSubdirectories = true });
+            var files = Directory.EnumerateFiles(library, "*", new EnumerationOptions() { RecurseSubdirectories = true });
             foreach (var file in files)
             {
-                if (dataService.GetTracksByPath(file).Length == 0)
+                if (!IsMusicFile(file))
                 {
-                    var atlTrack = new ATL.Track(file);
-                    dataService.AddTrack(TrackDataConverter.Convert(atlTrack));
+                    continue;
                 }
+                if (dataService.GetTracksByPath(file).Length == 0)
+                    {
+                        var atlTrack = new ATL.Track(file);
+                        dataService.AddTrack(TrackDataConverter.Convert(atlTrack));
+                    }
             }
 
             dataService.CreateAndPopulateArtists();
@@ -116,6 +132,106 @@ class Program
             }
         });
 
+        Command updateFilesCommand = new("update-files", "Update the metadata on files.")
+        {
+            directoryOption,
+            albumOption,
+            artistOption
+        };
+        rootCommand.Subcommands.Add(updateFilesCommand);
+        updateFilesCommand.SetAction(parseResult =>
+        {
+            Console.WriteLine("Updating Files");
+
+            var dir = parseResult.GetValue<DirectoryInfo>(directoryOption);
+            if (dir == null || !dir.Exists)
+            {
+                Console.WriteLine("Directory does not exist");
+                return;
+            }
+
+            var newAlbumName = parseResult.GetValue<string>(albumOption);
+            var newArtistName = parseResult.GetValue<string>(artistOption);
+
+            foreach (var file in dir.EnumerateFiles("*", new EnumerationOptions() { RecurseSubdirectories = true }))
+            {
+                if (!IsMusicFile(file.FullName))
+                {
+                    continue;
+                }
+
+                var atl = new ATL.Track(file.FullName);
+
+                if (!String.IsNullOrEmpty(newAlbumName))
+                {
+                    atl.Album = newAlbumName;
+                    dataService.UpdateTrackAlbum(atl.Path, newAlbumName);
+                }
+
+                if (!String.IsNullOrEmpty(newArtistName))
+                {
+                    atl.Artist = newArtistName;
+                    dataService.UpdateTrackArtist(atl.Path, newArtistName);
+                }
+
+                atl.Save();
+            }
+        });
+
+        Command reorganizeCommand = new("reorganize", "Copy and organize library.")
+        {
+            directoryOption
+        };
+        rootCommand.Subcommands.Add(reorganizeCommand);
+        reorganizeCommand.SetAction(parseResult =>
+        {
+            Console.WriteLine("Reorganizing");
+
+            var output = parseResult.GetValue<DirectoryInfo>(directoryOption);
+
+            if (output == null || !output.Exists)
+            {
+                Console.WriteLine("Output directory does not exist");
+                return;
+            }
+
+            var tracks = dataService.GetTracks();
+            foreach (var t in tracks)
+            {
+                var album = t.Album.Trim();
+                var track = $"{t.TrackNumber:d2} - {t.Title}";
+                var extension = Path.GetExtension(t.Path);
+                foreach (var c in Path.GetInvalidFileNameChars())
+                {
+                    album = album.Replace(c, '-');
+                    track = track.Replace(c, '-');
+                }
+                var albumPath = Path.Combine(output.FullName, album);
+                if (!Directory.Exists(albumPath))
+                {
+                    Directory.CreateDirectory(albumPath);
+                }
+
+                var newTrackPath = Path.Join(albumPath, $"{track}{extension}");
+
+                if (File.Exists(newTrackPath))
+                {
+                    Console.WriteLine($"  !DUPLICATE: {newTrackPath}");
+                    foreach (var possibleDupe in dataService.GetTracksByAlbum(t.Album))
+                    {
+                        if (String.Equals(possibleDupe.Title, t.Title))
+                        {
+                            Console.WriteLine($"    * {possibleDupe.Path}");
+                        }
+                    }
+                }
+                else
+                {
+                    File.Copy(t.Path, newTrackPath);
+                }
+            }
+        });
+
         ParseResult parseResult = rootCommand.Parse(args);
         if (parseResult.Errors.Count > 0)
         {
@@ -127,6 +243,23 @@ class Program
         }
         parseResult.Invoke();
         return 0;
+    }
+
+    static bool IsMusicFile(string? path)
+    {
+        if (String.IsNullOrEmpty(path))
+        {
+            return false;
+        }
+
+        var extension = Path.GetExtension(path);
+
+        if (new string[] { ".mp3", ".m4a" }.Contains(extension.ToLowerInvariant()))
+        {
+            return true;
+        }
+
+        return false;
     }
 }
 

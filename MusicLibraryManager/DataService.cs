@@ -146,6 +146,32 @@ class DataService : IDisposable
         return tracks.ToArray();
     }
 
+    public void UpdateTrackAlbum(string path, string albumName)
+    {
+        var command = _connection.CreateCommand();
+        command.CommandText =
+        @"
+            UPDATE tracks SET album = $album WHERE path = $path;
+        ";
+        command.Parameters.AddWithValue("$path", path);
+        command.Parameters.AddWithValue("$album", albumName);
+
+        command.ExecuteNonQuery();
+    }
+
+    public void UpdateTrackArtist(string path, string artistName)
+    {
+        var command = _connection.CreateCommand();
+        command.CommandText =
+        @"
+            UPDATE tracks SET artist = $artist WHERE path = $path;
+        ";
+        command.Parameters.AddWithValue("$path", path);
+        command.Parameters.AddWithValue("$artist", artistName);
+
+        command.ExecuteNonQuery();
+    }
+
     public Track[] GetTracksByAlbum(string album)
     {
         var tracks = new List<Track>();

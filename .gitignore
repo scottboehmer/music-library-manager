@@ -8,6 +8,7 @@
 
 # Databases
 *.db
+*.db-journal
 
 # User-specific files
 *.rsuser
