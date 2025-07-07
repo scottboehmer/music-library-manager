@@ -1,0 +1,1 @@
+public record Track (string Title, string Artist, string Album, int TrackNumber, string Genre, int Year, int Duration, string Path);
