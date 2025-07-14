@@ -21,6 +21,12 @@ class Program
             Required = false
         };
 
+        Option<string> titleOption = new("--title")
+        {
+            Description = "The title.",
+            Required = false
+        };
+
         Option<string> genreOption = new("--genre")
         {
             Description = "The genre name.",
@@ -62,10 +68,10 @@ class Program
                     continue;
                 }
                 if (dataService.GetTracksByPath(file).Length == 0)
-                    {
-                        var atlTrack = new ATL.Track(file);
-                        dataService.AddTrack(TrackDataConverter.Convert(atlTrack));
-                    }
+                {
+                    var atlTrack = new ATL.Track(file);
+                    dataService.AddTrack(TrackDataConverter.Convert(atlTrack));
+                }
             }
 
             dataService.CreateAndPopulateArtists();
@@ -110,7 +116,9 @@ class Program
         Command listTracksCommand = new("list-tracks", "List tracks in the collection.")
         {
             albumOption,
-            genreOption
+            genreOption,
+            artistOption,
+            titleOption
         };
         rootCommand.Subcommands.Add(listTracksCommand);
         listTracksCommand.SetAction(parseResult =>
@@ -118,7 +126,9 @@ class Program
             Console.WriteLine("Tracks");
             var album = parseResult.GetValue<string>("--album");
             var genre = parseResult.GetValue<string>("--genre");
-            var tracks = String.IsNullOrEmpty(album) ? dataService.GetTracks() : dataService.GetTracksByAlbum(album);
+            var artist = parseResult.GetValue<string>("--artist");
+            var title = parseResult.GetValue<string>("--title");
+            var tracks = dataService.QueryTracks(title, artist, album);
             foreach (var t in tracks)
             {
                 if (!String.IsNullOrEmpty(genre))
@@ -128,7 +138,15 @@ class Program
                         continue;
                     }
                 }
-                Console.WriteLine($"    {t.TrackNumber} • {t.Title} • {t.Album} • {t.Artist}");
+                if (String.IsNullOrEmpty(album))
+                {
+                    Console.WriteLine($"    {t.Title} • {t.Album} • {t.TrackNumber} • {t.Artist}");
+                }
+                else
+                {
+                    Console.WriteLine($"    {t.TrackNumber} • {t.Title} • {t.Album} • {t.Artist}");
+                }
+                
             }
         });
 
@@ -228,6 +246,11 @@ class Program
                 else
                 {
                     File.Copy(t.Path, newTrackPath);
+
+                    // This approach seems much slower...
+                    /*var atlTrack = new ATL.Track(t.Path);
+                    TrackDataConverter.Cleanup(atlTrack);
+                    atlTrack.SaveTo(newTrackPath);*/
                 }
             }
         });

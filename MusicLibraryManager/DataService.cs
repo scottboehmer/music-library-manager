@@ -81,37 +81,46 @@ class DataService : IDisposable
 
     public Track[] GetTracks()
     {
-        var tracks = new List<Track>();
-
-        var command = _connection.CreateCommand();
-        command.CommandText =
-        @"
-            SELECT title, artist, album, track, genre, year, duration, path FROM tracks;
-        ";
-
-        using (var reader = command.ExecuteReader())
-        {
-            while (reader.Read())
-            {
-                tracks.Add(new Track(reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetInt32(3), reader.GetString(4), reader.GetInt32(5), reader.GetInt32(6), reader.GetString(7)));
-            }
-        }
-
-        return tracks.ToArray();
+        return QueryTracks(null, null, null);
     }
 
     public Track[] GetTracks(string title, string artist, string album)
     {
+        return QueryTracks(title, artist, album);
+    }
+
+    public Track[] QueryTracks(string? title, string? artist, string? album)
+    {
         var tracks = new List<Track>();
 
         var command = _connection.CreateCommand();
-        command.CommandText =
-        @"
-            SELECT title, artist, album, track, genre, year, duration, path FROM tracks WHERE title = $title AND artist = $artist AND album = $album;
-        ";
-        command.Parameters.AddWithValue("$title", title);
-        command.Parameters.AddWithValue("$artist", artist);
-        command.Parameters.AddWithValue("$album", album);
+        var commandText = "SELECT title, artist, album, track, genre, year, duration, path FROM tracks";
+
+        bool hasWhere = false;
+
+        if (!String.IsNullOrEmpty(title))
+        {
+            commandText += $" {(hasWhere ? "AND" : "WHERE")} instr(lower(title), lower($title))";
+            command.Parameters.AddWithValue("$title", title);
+            hasWhere = true;
+        }
+
+        if (!String.IsNullOrEmpty(artist))
+        {
+            commandText += $" {(hasWhere ? "AND" : "WHERE")} instr(artist, $artist)";
+            command.Parameters.AddWithValue("$artist", artist);
+            hasWhere = true;
+        }
+
+        if (!String.IsNullOrEmpty(album))
+        {
+            commandText += $" {(hasWhere ? "AND" : "WHERE")} album = $album";
+            command.Parameters.AddWithValue("$album", album);
+            hasWhere = true;
+        }
+
+        commandText += String.IsNullOrEmpty(album) ? " ORDER BY title;" : " ORDER BY track;";
+        command.CommandText = commandText;
 
         using (var reader = command.ExecuteReader())
         {
@@ -174,24 +183,7 @@ class DataService : IDisposable
 
     public Track[] GetTracksByAlbum(string album)
     {
-        var tracks = new List<Track>();
-
-        var command = _connection.CreateCommand();
-        command.CommandText =
-        @"
-            SELECT title, artist, album, track, genre, year, duration, path FROM tracks WHERE album = $album ORDER BY track;
-        ";
-        command.Parameters.AddWithValue("$album", album);
-
-        using (var reader = command.ExecuteReader())
-        {
-            while (reader.Read())
-            {
-                tracks.Add(new Track(reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetInt32(3), reader.GetString(4), reader.GetInt32(5), reader.GetInt32(6), reader.GetString(7)));
-            }
-        }
-
-        return tracks.ToArray();
+        return QueryTracks(null, null, album);
     }
 
     public string[] GetAlbums()
