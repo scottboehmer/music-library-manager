@@ -19,36 +19,43 @@ public static class TrackDataConverter
         return new Track(title, artist, album, trackNumber, genre, year, duration, path);
     }
 
-    public static void Cleanup(ATL.Track atl)
+    public static bool Cleanup(ATL.Track atl)
     {
+        bool dirty = false;
+
         if (atl.AdditionalFields.ContainsKey("TAL\0"))
         {
             atl.Album = atl.AdditionalFields["TAL\0"];
             atl.AdditionalFields.Remove("TAL\0");
+            dirty = true;
         }
 
         if (atl.AdditionalFields.ContainsKey("TP1\0"))
         {
             atl.Artist = atl.AdditionalFields["TP1\0"];
             atl.AdditionalFields.Remove("TP1\0");
+            dirty = true;
         }
 
         if (atl.AdditionalFields.ContainsKey("TRK\0"))
         {
             atl.TrackNumber = Int32.TryParse(atl.AdditionalFields["TRK\0"], out int t) ? t : atl.TrackNumber;
             atl.AdditionalFields.Remove("TRK\0");
+            dirty = true;
         }
 
         if (atl.AdditionalFields.ContainsKey("TT2\0"))
         {
             atl.Title = atl.AdditionalFields["TT2\0"];
             atl.AdditionalFields.Remove("TT2\0");
+            dirty = true;
         }
 
         if (atl.AdditionalFields.ContainsKey("TYE\0"))
         {
             atl.Year = Int32.TryParse(atl.AdditionalFields["TYE\0"], out int y) ? y : atl.Year;
             atl.AdditionalFields.Remove("TYE\0");
+            dirty = true;
         }
 
         // TODO: Genre...
@@ -56,6 +63,9 @@ public static class TrackDataConverter
         if (String.IsNullOrEmpty(atl.Album))
         {
             atl.Album = atl.Title;
+            dirty = true;
         }
+
+        return dirty;
     }
 }
